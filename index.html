@@ -197,11 +197,17 @@
             setTimeout(() => toast.classList.add('opacity-0'), 3000);
         }
 
+        // --- Encoding/Decoding functions with compression ---
         function encodeState(state) {
             try {
                 const jsonString = JSON.stringify(state);
-                const compressed = pako.deflate(jsonString, { to: 'string' });
-                return btoa(compressed);
+                // pako.deflate returns a Uint8Array. We need to convert it to a binary string for btoa.
+                const compressed = pako.deflate(jsonString);
+                let binaryString = '';
+                for (let i = 0; i < compressed.length; i++) {
+                    binaryString += String.fromCharCode(compressed[i]);
+                }
+                return btoa(binaryString);
             } catch (e) {
                 console.error("Lỗi mã hóa:", e);
                 return '';
@@ -211,13 +217,20 @@
         function decodeState(encodedState) {
             try {
                 const binaryString = atob(encodedState);
-                const jsonString = pako.inflate(binaryString, { to: 'string' });
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                // pako.inflate takes a Uint8Array.
+                const jsonString = pako.inflate(bytes, { to: 'string' });
                 return JSON.parse(jsonString);
             } catch (e) {
                 console.error("Lỗi giải mã:", e);
                 return null;
             }
         }
+
 
         function createDiceDots(face) {
             let dots = '';
@@ -505,14 +518,18 @@
             }
             const decodedState = decodeState(code);
             if (!decodedState || !decodedState.p) {
-                showNotification("Mã không hợp lệ.");
+                showNotification("Mã không hợp lệ hoặc sao chép bị lỗi.");
                 return;
             }
-            // BUG FIX: Only preserve the name. Score and other states must be from the new code.
+            
             const myCurrentName = gameState.p[myPlayerId].n;
-
+            
             gameState = decodedState;
-            gameState.p[myPlayerId].n = myCurrentName; 
+            // Restore my name and opponent's name from my local state
+            // to prevent name-spoofing
+            gameState.p[myPlayerId].n = myCurrentName;
+            gameState.p[1-myPlayerId].n = document.getElementById('player-2-info').querySelector('h3').textContent.replace(' (Bạn)','');
+
 
             gameCodeInput.value = '';
             updateUI();
