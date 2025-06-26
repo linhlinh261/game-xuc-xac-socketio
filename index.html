@@ -171,16 +171,14 @@
         // --- CẤU HÌNH FIREBASE ---
         // QUAN TRỌNG: Dán cấu hình Firebase của bạn vào đây để chạy trên Render/GitHub.
         const userFirebaseConfig = {
-          apiKey: "AIzaSyCUrFw_GAv5bIGfwFfuiwCuBcjaNqFohVs",
-          authDomain: "tonghaixucxac.firebaseapp.com",
-          projectId: "tonghaixucxac",
-          storageBucket: "tonghaixucxac.appspot.com", // Corrected storage bucket format
-          messagingSenderId: "282682257745",
-          appId: "1:282682257745:web:30d2691022c361cde8a370",
-          measurementId: "G-BGG4411ZZK"
+          // apiKey: "AIza...",
+          // authDomain: "your-project.firebaseapp.com",
+          // projectId: "your-project",
+          // storageBucket: "your-project.appspot.com",
+          // messagingSenderId: "...",
+          // appId: "..."
         };
 
-        // Mã này sẽ ưu tiên cấu hình của người dùng. Nếu không có, nó sẽ thử dùng cấu hình của môi trường Canvas.
         const firebaseConfig = Object.keys(userFirebaseConfig).length > 1 ? userFirebaseConfig : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {});
         const appId = firebaseConfig.projectId || (typeof __app_id !== 'undefined' ? __app_id : 'dice-bet-game-default');
         // -------------------------
@@ -189,16 +187,15 @@
         let app, db, auth;
         try {
             if (!firebaseConfig.apiKey) {
-                 throw new Error("Cấu hình Firebase không hợp lệ hoặc bị thiếu.");
+                 throw new Error("Cấu hình Firebase bị thiếu.");
             }
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
         } catch (e) {
             console.error("Lỗi khởi tạo Firebase: ", e);
-            showNotification("Lỗi cấu hình Firebase. Không thể bắt đầu trò chơi.");
+            document.getElementById('name-view').innerHTML = `<p class="text-red-500 p-4">Lỗi cấu hình Firebase. Không thể bắt đầu trò chơi. Vui lòng kiểm tra lại mã cấu hình.</p>`;
         }
-
 
         // App State
         let userId = null;
@@ -215,32 +212,26 @@
         const playerNameInput = document.getElementById('player-name');
         const submitNameBtn = document.getElementById('submit-name-btn');
         const roomList = document.getElementById('room-list');
-
         const gameStatus = document.getElementById('game-status');
         const coinTossView = document.getElementById('coin-toss-view');
         const bettingView = document.getElementById('betting-view');
         const diceRollView = document.getElementById('dice-roll-view');
         const resultView = document.getElementById('result-view');
-        
         const leaveRoomBtn = document.getElementById('leave-room-btn');
         const playAgainBtn = document.getElementById('play-again-btn');
 
         // --- UTILITY ---
-        function showNotification(message, isError = true) {
+        function showNotification(message) {
             const toast = document.getElementById('notification-toast');
             if (!toast) return;
             toast.textContent = message;
-            toast.className = `fixed top-5 right-5 text-white py-2 px-4 rounded-lg shadow-lg transition-all duration-300 z-50 opacity-100 pointer-events-auto ${isError ? 'bg-red-600' : 'bg-blue-600'}`;
-            
-            setTimeout(() => {
-                toast.classList.replace('opacity-100', 'opacity-0');
-                toast.classList.add('pointer-events-none');
-            }, 3000);
+            toast.classList.remove('opacity-0');
+            setTimeout(() => toast.classList.add('opacity-0'), 3000);
         }
 
         // --- INITIALIZATION ---
         function initializeAppSequence() {
-            if (!auth) return; // Stop if Firebase failed to initialize
+            if (!auth) return; 
 
             onAuthStateChanged(auth, (user) => {
                 if (user) {
@@ -252,16 +243,14 @@
                     userId = null;
                     playerNameInput.disabled = true;
                     submitNameBtn.disabled = true;
-                    console.log("User is not signed in.");
                 }
             });
 
             signInAnonymously(auth).catch((error) => {
                 console.error("Anonymous sign-in failed:", error);
-                showNotification("Không thể kết nối đến máy chủ trò chơi.");
+                showNotification("Không thể kết nối đến máy chủ. Hãy chắc chắn bạn đã bật đăng nhập ẩn danh trong Firebase.");
             });
         }
-
 
         // --- LOBBY LOGIC ---
         function showLobby() {
@@ -296,8 +285,8 @@
                 });
                 renderRooms(roomsData);
             }, (error) => {
-                console.error("Firestore listen error on lobby:", error);
-                showNotification("Mất kết nối với sảnh chờ.");
+                console.error("Lỗi Firestore:", error);
+                showNotification("Không thể tải danh sách phòng. Hãy chắc chắn bạn đã cài đặt Firestore và quy tắc bảo mật.");
             });
         }
 
@@ -329,15 +318,9 @@
 
         // --- GAME LOGIC ---
         async function joinRoom(roomId, roomNumber) {
-            if (!playerName || !userId) {
-                showNotification('Có lỗi xảy ra. Vui lòng thử lại.');
-                return;
-            }
+            if (!playerName || !userId) return;
 
-            if (lobbyUnsubscribe) {
-                lobbyUnsubscribe();
-                lobbyUnsubscribe = null;
-            }
+            if (lobbyUnsubscribe) { lobbyUnsubscribe(); lobbyUnsubscribe = null; }
 
             currentRoomId = roomId;
             const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, roomId);
@@ -346,24 +329,20 @@
                 await runTransaction(db, async (transaction) => {
                     const roomDoc = await transaction.get(roomDocRef);
                     if (!roomDoc.exists()) {
-                        const newRoomData = {
+                        transaction.set(roomDocRef, {
                             playerIds: [userId],
                             players: { [userId]: { name: playerName, score: 0 } },
                             gameState: 'waiting'
-                        };
-                        transaction.set(roomDocRef, newRoomData);
+                        });
                     } else {
                         const data = roomDoc.data();
                         if (data.playerIds.length >= 2) throw new Error("Phòng đã đầy!");
                         if (data.playerIds.includes(userId)) return;
                         
-                        const newPlayerIds = [...data.playerIds, userId];
-                        const newPlayers = { ...data.players, [userId]: { name: playerName, score: 0 } };
-                        transaction.update(roomDocRef, {
-                            playerIds: newPlayerIds,
-                            players: newPlayers,
-                            gameState: 'coinToss'
-                        });
+                        data.playerIds.push(userId);
+                        data.players[userId] = { name: playerName, score: 0 };
+                        data.gameState = 'coinToss';
+                        transaction.update(roomDocRef, data);
                     }
                 });
 
@@ -375,7 +354,7 @@
                 listenToRoomUpdates();
 
             } catch (e) {
-                console.error("Failed to join room: ", e);
+                console.error("Lỗi vào phòng: ", e);
                 showNotification(e.message);
                 currentRoomId = null;
                 showLobby();
@@ -389,10 +368,7 @@
             const roomToLeaveId = currentRoomId;
             currentRoomId = null; 
 
-            if (roomUnsubscribe) {
-                roomUnsubscribe();
-                roomUnsubscribe = null;
-            }
+            if (roomUnsubscribe) { roomUnsubscribe(); roomUnsubscribe = null; }
 
             const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, roomToLeaveId);
             
@@ -402,15 +378,14 @@
                     if(roomDoc.exists()){
                         const data = roomDoc.data();
                         const newPlayerIds = data.playerIds.filter(id => id !== userId);
-                        const newPlayers = { ...data.players };
-                        delete newPlayers[userId];
-
+                        delete data.players[userId];
+                        
                         if(newPlayerIds.length === 0){
                             transaction.delete(roomDocRef);
                         } else {
                              transaction.update(roomDocRef, {
                                 playerIds: newPlayerIds,
-                                players: newPlayers,
+                                players: data.players,
                                 gameState: 'waiting', 
                                 turn: null, coinTossWinner: null, diceResult: null, roundWinner: null,
                              });
@@ -418,7 +393,7 @@
                     }
                  });
             } catch (e) {
-                console.error("Error leaving room: ", e);
+                console.error("Lỗi rời phòng: ", e);
             } finally {
                 showLobby();
             }
@@ -432,16 +407,14 @@
             const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId);
             roomUnsubscribe = onSnapshot(roomDocRef, (doc) => {
                 if (!hasJoinedRoom) return;
-
                 if (doc.exists()) {
-                    const roomData = doc.data();
-                    updateUI(roomData);
+                    updateUI(doc.data());
                 } else {
                     showNotification("Phòng không còn tồn tại. Quay trở lại sảnh chờ.", false);
                     leaveRoom();
                 }
             }, (error) => {
-                console.error("Firestore listen error on room:", error);
+                console.error("Lỗi lắng nghe phòng:", error);
                 showNotification("Mất kết nối với phòng chơi.");
                 leaveRoom();
             });
@@ -451,26 +424,26 @@
             if (!data || !data.players || !userId) return;
             
             const playerIds = data.playerIds || [];
-            const players = data.players;
+            const me = data.players[userId];
             const opponentId = playerIds.find(id => id !== userId);
+            const opponent = opponentId ? data.players[opponentId] : null;
 
-            const updatePlayerBox = (elementId, playerId, isMe) => {
+            const updatePlayerBox = (elementId, playerData, isMe) => {
                  const box = document.getElementById(elementId);
-                 if (!playerId || !players[playerId]) {
-                     box.innerHTML = `<p class="text-gray-500">Đang chờ...</p>`;
-                     return;
+                 if (!playerData) {
+                    box.innerHTML = `<p class="text-gray-500">Đang chờ...</p>`;
+                    return;
                  }
-                 const playerData = players[playerId];
                  box.innerHTML = `
                     <h3 class="text-lg font-bold">${playerData.name} ${isMe ? '(Bạn)' : ''}</h3>
-                    <p class="text-2xl font-black text-indigo-600">${playerData.score} Điểm</p>
+                    <p class="text-2xl font-black text-indigo-600">${playerData.score || 0} Điểm</p>
                     ${playerData.diceBet ? `<p class="mt-1">Đã cược: <span class="font-bold">${playerData.diceBet}</span></p>` : ''}
                     ${playerData.coinTossChoice ? `<p class="mt-1">Chọn đồng xu: <span class="font-bold capitalize">${playerData.coinTossChoice === 'heads' ? 'Sấp' : 'Ngửa'}</span></p>` : ''}
                  `;
             };
 
-            updatePlayerBox('player-1-info', userId, true);
-            updatePlayerBox('player-2-info', opponentId, false);
+            updatePlayerBox('player-1-info', me, true);
+            updatePlayerBox('player-2-info', opponent, false);
 
             coinTossView.classList.add('hidden');
             bettingView.classList.add('hidden');
@@ -497,23 +470,21 @@
         }
         
         async function handleCoinTossState(data) {
-            const myPlayerData = data.players[userId];
-            if (myPlayerData.coinTossChoice) {
+            const me = data.players[userId];
+            if (me.coinTossChoice) {
                 gameStatus.textContent = 'Đã chọn. Đang chờ đối thủ...';
             } else {
-                gameStatus.textContent = 'Quyết định ai đi trước!';
+                gameStatus.textContent = 'Đến lượt bạn! Hãy chọn Sấp hoặc Ngửa.';
                 coinTossView.classList.remove('hidden');
             }
 
             const allPlayersChosen = data.playerIds.length === 2 && data.playerIds.every(id => data.players[id].coinTossChoice);
-            if (allPlayersChosen && data.playerIds.includes(userId) && data.playerIds[0] === userId) {
+            if (allPlayersChosen && data.playerIds[0] === userId) {
                 const coinResult = Math.random() < 0.5 ? 'heads' : 'tails';
                 const winnerId = data.playerIds.find(id => data.players[id].coinTossChoice === coinResult) || data.playerIds[0];
                 
                 const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId);
-                await updateDoc(roomDocRef, {
-                    gameState: 'betting', coinTossWinner: winnerId, turn: winnerId
-                });
+                await updateDoc(roomDocRef, { gameState: 'betting', coinTossWinner: winnerId, turn: winnerId });
             }
         }
 
@@ -525,51 +496,42 @@
         document.getElementById('tails-btn').onclick = () => selectCoinToss('tails');
 
         async function handleBettingState(data) {
-            const myTurn = data.turn === userId;
-            const opponentId = data.playerIds.find(id => id !== userId);
-            
-            if (myTurn) {
+            if (data.turn === userId) {
                 gameStatus.textContent = 'Đến lượt bạn! Hãy chọn một số.';
+                bettingView.classList.remove('hidden');
+                renderBettingBoard(data);
             } else {
-                gameStatus.textContent = `Đang chờ ${data.players[opponentId]?.name || 'đối thủ'} đặt cược...`;
-            }
-
-            bettingView.classList.remove('hidden');
-            renderBettingBoard(data);
-
-            const allPlayersBet = data.playerIds.length === 2 && data.playerIds.every(id => data.players[id].diceBet);
-            if (allPlayersBet && data.playerIds.includes(userId) && data.playerIds[0] === userId) {
-                 const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId);
-                 await updateDoc(roomDocRef, { gameState: 'rolling' });
+                gameStatus.textContent = `Đang chờ đối thủ đặt cược...`;
             }
         }
 
         function renderBettingBoard(data) {
             const board = document.getElementById('betting-board');
             board.innerHTML = '';
-            const myTurn = data.turn === userId;
-            const myBet = data.players[userId]?.diceBet;
+            const me = data.players[userId];
             const opponentId = data.playerIds.find(id => id !== userId);
-            const opponentBet = opponentId ? data.players[opponentId]?.diceBet : null;
+            const opponent = opponentId ? data.players[opponentId] : null;
 
             for (let i = 2; i <= 12; i++) {
                 const circle = document.createElement('button');
                 circle.textContent = i;
-                let isSelected = i === myBet || i === opponentBet;
-
+                let isSelectedByOpponent = opponent && opponent.diceBet === i;
+                let isSelectedByMe = me.diceBet === i;
+                let isSelected = isSelectedByMe || isSelectedByOpponent;
+                
                 let classes = 'bet-circle w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold border-4 transition ';
                 
-                if (i === myBet) classes += 'selected-by-me ';
-                else if (i === opponentBet) classes += 'selected-by-opponent ';
+                if (isSelectedByMe) classes += 'selected-by-me ';
+                else if (isSelectedByOpponent) classes += 'selected-by-opponent ';
                 else classes += 'bg-white border-gray-300 ';
 
-                if (myTurn && !myBet && !isSelected) classes += 'hover:bg-blue-200 cursor-pointer';
+                if (data.turn === userId) classes += 'hover:bg-blue-200 cursor-pointer';
                 else classes += 'cursor-not-allowed';
                 
                 if (data.gameState === 'result' && i === data.diceResult) classes += ' correct-guess';
 
                 circle.className = classes;
-                circle.disabled = !myTurn || isSelected || myBet;
+                circle.disabled = data.turn !== userId || isSelected;
                 if(!circle.disabled) circle.onclick = () => placeBet(i);
                 board.appendChild(circle);
             }
@@ -580,19 +542,23 @@
             const roomSnapshot = await getDoc(roomDocRef);
             if (!roomSnapshot.exists()) return;
             const opponentId = roomSnapshot.data().playerIds.find(id => id !== userId);
+            
+            const allHaveBet = !!roomSnapshot.data().players[opponentId]?.diceBet;
 
             await updateDoc(roomDocRef, {
                 [`players.${userId}.diceBet`]: number,
-                turn: opponentId
+                turn: opponentId,
+                gameState: allHaveBet ? 'rolling' : 'betting'
             });
         }
 
-        function handleRollingState(data) {
-            gameStatus.textContent = 'Xúc xắc đang được tung!';
+        async function handleRollingState(data) {
+            gameStatus.textContent = 'Đang tung xúc xắc...';
             diceRollView.classList.remove('hidden');
+            document.getElementById('rolling-text').textContent = 'Tất cả đã cược! Đang tung xúc xắc...';
             animateDice();
 
-            if (data.playerIds.includes(userId) && data.playerIds[0] === userId) {
+            if (data.playerIds[0] === userId) {
                 setTimeout(async () => {
                     const die1 = Math.floor(Math.random() * 6) + 1;
                     const die2 = Math.floor(Math.random() * 6) + 1;
@@ -601,44 +567,22 @@
                     const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId);
                     const currentDoc = await getDoc(roomDocRef);
                     if (!currentDoc.exists()) return;
-                    const currentData = currentDoc.data();
-
-                    const p1_id = currentData.playerIds[0];
-                    const p2_id = currentData.playerIds[1];
-                    const p1_data = currentData.players[p1_id];
-                    const p2_data = currentData.players[p2_id];
-
-                    let p1_new_score = p1_data.score;
-                    let p2_new_score = p2_data.score;
-                    let winner = 'none';
-
-                    if (p1_data.diceBet === total) {
-                        p1_new_score++;
-                        winner = p1_id;
-                    }
-                    if (p2_data.diceBet === total) {
-                        p2_new_score++;
-                        winner = (winner !== 'none') ? 'tie' : p2_id;
-                    }
                     
+                    const p1 = currentDoc.data().players[data.playerIds[0]];
+                    const p2 = currentDoc.data().players[data.playerIds[1]];
+                    let p1Won = p1.diceBet === total;
+                    let p2Won = p2.diceBet === total;
+
                     await updateDoc(roomDocRef, {
                         gameState: 'result',
                         diceResult: total,
-                        roundWinner: winner,
-                        [`players.${p1_id}.score`]: p1_new_score,
-                        [`players.${p2_id}.score`]: p2_new_score,
+                        roundWinner: p1Won && p2Won ? 'tie' : (p1Won ? data.playerIds[0] : (p2Won ? data.playerIds[1] : 'none')),
+                        [`players.${data.playerIds[0]}.score`]: p1.score + (p1Won ? 1 : 0),
+                        [`players.${data.playerIds[1]}.score`]: p2.score + (p2Won ? 1 : 0),
                         diceFaces: [die1, die2]
                     });
                 }, 2500);
             }
-        }
-
-        function createDiceDots(face) {
-            let dots = '';
-            for(let i=0; i < face; i++) {
-                dots += `<div class="dot-container"><div class="dot"></div></div>`;
-            }
-            return `<div class="dice bg-white shadow-md dot-${face}">${dots}</div>`;
         }
 
         function animateDice() {
@@ -653,6 +597,14 @@
                 counter++;
                 if (counter > 15) clearInterval(interval);
             }, 150);
+        }
+
+        function createDiceDots(face) {
+            let dots = '';
+            for(let i=0; i < face; i++) {
+                dots += `<div class="dot-container"><div class="dot"></div></div>`;
+            }
+            return `<div class="dice bg-white shadow-md dot-${face}">${dots}</div>`;
         }
         
         function handleResultState(data) {
@@ -673,18 +625,15 @@
             
             if (data.roundWinner === 'none') {
                 winnerText.textContent = 'Không ai đoán trúng!';
-                winnerText.className = 'text-xl font-semibold text-gray-600 mb-4';
             } else if (data.roundWinner === 'tie') {
                 winnerText.textContent = 'Cả hai người chơi đều đoán trúng!';
-                winnerText.className = 'text-xl font-semibold text-purple-600 mb-4';
             } else {
                 const winnerName = data.players[data.roundWinner].name;
                 winnerText.textContent = `${winnerName} đã thắng vòng này!`;
-                winnerText.className = 'text-xl font-semibold text-green-600 mb-4';
             }
             
-            const myPlayerData = data.players[userId];
-            if (myPlayerData && myPlayerData.wantsToPlayAgain) {
+            const me = data.players[userId];
+            if (me && me.wantsToPlayAgain) {
                 playAgainBtn.textContent = 'Đang chờ đối thủ...';
                 playAgainBtn.disabled = true;
             } else {
@@ -692,7 +641,7 @@
                 playAgainBtn.disabled = false;
             }
 
-             if (data.playerIds.includes(userId) && data.playerIds.length === 2 && data.playerIds.every(id => data.players[id].wantsToPlayAgain)) {
+             if (data.playerIds.length === 2 && data.playerIds.every(id => data.players[id].wantsToPlayAgain)) {
                  if(data.playerIds[0] === userId) resetForNewRound();
              }
         }
@@ -708,20 +657,21 @@
             if (!roomDoc.exists()) return;
 
             const data = roomDoc.data();
-            const playersReset = {};
-            data.playerIds.forEach(id => {
-                playersReset[id] = { ...data.players[id], coinTossChoice: null, diceBet: null, wantsToPlayAgain: false };
+            Object.keys(data.players).forEach(id => {
+                data.players[id] = { ...data.players[id], coinTossChoice: null, diceBet: null, wantsToPlayAgain: false };
             });
             
             await updateDoc(roomDocRef, {
-                players: playersReset, gameState: 'coinToss', turn: null,
-                coinTossWinner: null, diceResult: null, roundWinner: null
+                players: data.players, 
+                gameState: 'coinToss', 
+                turn: null,
+                coinTossWinner: null, 
+                diceResult: null, 
+                roundWinner: null
             });
         }
 
-        // Start the application
         initializeAppSequence();
-
     </script>
 </body>
 </html>
