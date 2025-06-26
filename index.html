@@ -87,8 +87,8 @@
             <div class="bg-white p-8 rounded-xl shadow-lg text-center">
                 <h1 class="text-3xl font-bold mb-6 text-gray-700">Chào mừng bạn đến với Cược Xúc Xắc</h1>
                 <label for="player-name" class="block text-lg font-medium mb-2">Nhập tên của bạn để bắt đầu</label>
-                <input type="text" id="player-name" class="w-full max-w-sm mx-auto p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
-                <button id="submit-name-btn" class="mt-6 bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-all duration-300 shadow-md">Vào Sảnh Chờ</button>
+                <input type="text" id="player-name" class="w-full max-w-sm mx-auto p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition disabled:bg-gray-200" disabled>
+                <button id="submit-name-btn" class="mt-6 bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-all duration-300 shadow-md disabled:opacity-50 disabled:cursor-not-allowed" disabled>Vào Sảnh Chờ</button>
             </div>
         </div>
         
@@ -167,17 +167,23 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // --- DO NOT EDIT ---
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "dummy", authDomain: "dummy", projectId: "dummy" };
+        
+        // --- CẤU HÌNH FIREBASE ---
+        // Mã này sẽ tự động sử dụng cấu hình do môi trường Canvas cung cấp.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'dice-bet-game-default';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        // -------------------
+        // -------------------------
 
         // Firebase Initialization
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
+        let app, db, auth;
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+        } catch (e) {
+            console.error("Lỗi khởi tạo Firebase: ", e);
+            showNotification("Lỗi cấu hình Firebase. Không thể bắt đầu trò chơi.");
+        }
 
 
         // App State
@@ -220,18 +226,24 @@
 
         // --- INITIALIZATION ---
         function initializeAppSequence() {
+            if (!auth) return; // Stop if Firebase failed to initialize
+
             onAuthStateChanged(auth, (user) => {
                 if (user) {
+                    // Đăng nhập thành công
                     userId = user.uid;
                     console.log("Authenticated with User ID:", userId);
-                    // Auth is ready, app can proceed.
+                    playerNameInput.disabled = false;
+                    submitNameBtn.disabled = false;
                 } else {
-                    // This case is unlikely with anonymous auth unless there's a serious issue.
-                    showNotification("Lỗi xác thực. Vui lòng làm mới trang.");
+                    // Đã đăng xuất hoặc chưa đăng nhập
+                    userId = null;
+                    playerNameInput.disabled = true;
+                    submitNameBtn.disabled = true;
+                    console.log("User is not signed in.");
                 }
             });
 
-            // Sign in anonymously to get a session UID for Firestore rules
             signInAnonymously(auth).catch((error) => {
                 console.error("Anonymous sign-in failed:", error);
                 showNotification("Không thể kết nối đến máy chủ trò chơi.");
@@ -264,7 +276,7 @@
         function listenToLobbyUpdates() {
             if(lobbyUnsubscribe) lobbyUnsubscribe();
 
-            const roomsColRef = collection(db, 'artifacts', appId, 'public/data/rooms');
+            const roomsColRef = collection(db, `artifacts/${appId}/public/data/rooms`);
             lobbyUnsubscribe = onSnapshot(roomsColRef, (snapshot) => {
                 const roomsData = {};
                 snapshot.forEach(doc => {
@@ -316,7 +328,7 @@
             }
 
             currentRoomId = roomId;
-            const roomDocRef = doc(db, 'artifacts', appId, 'public/data/rooms', roomId);
+            const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, roomId);
 
             try {
                 await runTransaction(db, async (transaction) => {
@@ -370,7 +382,7 @@
                 roomUnsubscribe = null;
             }
 
-            const roomDocRef = doc(db, 'artifacts', appId, 'public/data/rooms', roomToLeaveId);
+            const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, roomToLeaveId);
             
             try {
                  await runTransaction(db, async (transaction) => {
@@ -405,7 +417,7 @@
         function listenToRoomUpdates() {
             if (roomUnsubscribe) roomUnsubscribe();
             
-            const roomDocRef = doc(db, 'artifacts', appId, 'public/data/rooms', currentRoomId);
+            const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId);
             roomUnsubscribe = onSnapshot(roomDocRef, (doc) => {
                 if (!hasJoinedRoom) return;
 
@@ -486,7 +498,7 @@
                 const coinResult = Math.random() < 0.5 ? 'heads' : 'tails';
                 const winnerId = data.playerIds.find(id => data.players[id].coinTossChoice === coinResult) || data.playerIds[0];
                 
-                const roomDocRef = doc(db, 'artifacts', appId, 'public/data/rooms', currentRoomId);
+                const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId);
                 await updateDoc(roomDocRef, {
                     gameState: 'betting', coinTossWinner: winnerId, turn: winnerId
                 });
@@ -494,7 +506,7 @@
         }
 
         async function selectCoinToss(choice) {
-            const roomDocRef = doc(db, 'artifacts', appId, 'public/data/rooms', currentRoomId);
+            const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId);
             await updateDoc(roomDocRef, { [`players.${userId}.coinTossChoice`]: choice });
         }
         document.getElementById('heads-btn').onclick = () => selectCoinToss('heads');
@@ -515,7 +527,7 @@
 
             const allPlayersBet = data.playerIds.length === 2 && data.playerIds.every(id => data.players[id].diceBet);
             if (allPlayersBet && data.playerIds.includes(userId) && data.playerIds[0] === userId) {
-                 const roomDocRef = doc(db, 'artifacts', appId, 'public/data/rooms', currentRoomId);
+                 const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId);
                  await updateDoc(roomDocRef, { gameState: 'rolling' });
             }
         }
@@ -552,7 +564,7 @@
         }
         
         async function placeBet(number) {
-            const roomDocRef = doc(db, 'artifacts', appId, 'public/data/rooms', currentRoomId);
+            const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId);
             const roomSnapshot = await getDoc(roomDocRef);
             if (!roomSnapshot.exists()) return;
             const opponentId = roomSnapshot.data().playerIds.find(id => id !== userId);
@@ -574,7 +586,7 @@
                     const die2 = Math.floor(Math.random() * 6) + 1;
                     const total = die1 + die2;
 
-                    const roomDocRef = doc(db, 'artifacts', appId, 'public/data/rooms', currentRoomId);
+                    const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId);
                     const currentDoc = await getDoc(roomDocRef);
                     if (!currentDoc.exists()) return;
                     const currentData = currentDoc.data();
@@ -674,12 +686,12 @@
         }
         
         playAgainBtn.addEventListener('click', async () => {
-            const roomDocRef = doc(db, 'artifacts', appId, 'public/data/rooms', currentRoomId);
+            const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId);
             await updateDoc(roomDocRef, { [`players.${userId}.wantsToPlayAgain`]: true });
         });
 
         async function resetForNewRound() {
-            const roomDocRef = doc(db, 'artifacts', appId, 'public/data/rooms', currentRoomId);
+            const roomDocRef = doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId);
             const roomDoc = await getDoc(roomDocRef);
             if (!roomDoc.exists()) return;
 
