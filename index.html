@@ -264,8 +264,13 @@
             }
 
             const decodedState = decodeState(code);
-            if (!decodedState || decodedState.st !== 'w') {
-                showNotification("Mã ván chơi không hợp lệ.");
+            // IMPROVED CHECK: Provide better feedback
+            if (!decodedState) {
+                showNotification("Mã không hợp lệ hoặc sao chép bị lỗi. Vui lòng thử lại.");
+                return;
+            }
+            if (decodedState.st !== 'w') {
+                showNotification("Mã này không phải là mã mời. Hãy yêu cầu người tạo phòng gửi lại mã mới.");
                 return;
             }
 
@@ -363,7 +368,8 @@
             coinTossView.classList.remove('hidden');
             if(me.c) {
                 gameStatus.textContent = `Đã chọn. Đang chờ ${opponent.n}...`;
-                instructionText.textContent = `Bạn đã chọn. Gửi mã này cho ${opponent.n} để họ đi lượt của mình.`;
+                // IMPROVED INSTRUCTION
+                instructionText.textContent = `Bạn đã chọn. Gửi mã này cho đối thủ của bạn để họ đi lượt của mình.`;
                 coinTossView.classList.add('hidden');
             } else {
                 gameStatus.textContent = 'Đến lượt bạn! Hãy chọn Sấp hoặc Ngửa.';
@@ -377,7 +383,8 @@
                 gameStatus.textContent = 'Đến lượt bạn! Hãy chọn một số.';
             } else {
                 gameStatus.textContent = `Đã cược. Đang chờ ${opponent.n}...`;
-                instructionText.textContent = `Bạn đã cược. Gửi mã này cho ${opponent.n} để họ đi lượt của mình.`;
+                // IMPROVED INSTRUCTION
+                instructionText.textContent = `Bạn đã cược. Gửi mã này cho đối thủ của bạn để họ đi lượt của mình.`;
             }
         }
 
@@ -501,12 +508,11 @@
                 showNotification("Mã không hợp lệ.");
                 return;
             }
+            // BUG FIX: Only preserve the name. Score and other states must be from the new code.
             const myCurrentName = gameState.p[myPlayerId].n;
-            const myCurrentScore = gameState.p[myPlayerId].s;
 
             gameState = decodedState;
             gameState.p[myPlayerId].n = myCurrentName; 
-            gameState.p[myPlayerId].s = myCurrentScore;
 
             gameCodeInput.value = '';
             updateUI();
