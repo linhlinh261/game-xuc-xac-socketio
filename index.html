@@ -169,14 +169,28 @@
         import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- CẤU HÌNH FIREBASE ---
-        // Mã này sẽ tự động sử dụng cấu hình do môi trường Canvas cung cấp.
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'dice-bet-game-default';
+        // QUAN TRỌNG: Dán cấu hình Firebase của bạn vào đây để chạy trên Render/GitHub.
+        const userFirebaseConfig = {
+          apiKey: "AIzaSyCUrFw_GAv5bIGfwFfuiwCuBcjaNqFohVs",
+          authDomain: "tonghaixucxac.firebaseapp.com",
+          projectId: "tonghaixucxac",
+          storageBucket: "tonghaixucxac.appspot.com", // Corrected storage bucket format
+          messagingSenderId: "282682257745",
+          appId: "1:282682257745:web:30d2691022c361cde8a370",
+          measurementId: "G-BGG4411ZZK"
+        };
+
+        // Mã này sẽ ưu tiên cấu hình của người dùng. Nếu không có, nó sẽ thử dùng cấu hình của môi trường Canvas.
+        const firebaseConfig = Object.keys(userFirebaseConfig).length > 1 ? userFirebaseConfig : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {});
+        const appId = firebaseConfig.projectId || (typeof __app_id !== 'undefined' ? __app_id : 'dice-bet-game-default');
         // -------------------------
 
         // Firebase Initialization
         let app, db, auth;
         try {
+            if (!firebaseConfig.apiKey) {
+                 throw new Error("Cấu hình Firebase không hợp lệ hoặc bị thiếu.");
+            }
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
@@ -230,13 +244,11 @@
 
             onAuthStateChanged(auth, (user) => {
                 if (user) {
-                    // Đăng nhập thành công
                     userId = user.uid;
                     console.log("Authenticated with User ID:", userId);
                     playerNameInput.disabled = false;
                     submitNameBtn.disabled = false;
                 } else {
-                    // Đã đăng xuất hoặc chưa đăng nhập
                     userId = null;
                     playerNameInput.disabled = true;
                     submitNameBtn.disabled = true;
