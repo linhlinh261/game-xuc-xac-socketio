@@ -82,17 +82,13 @@
             This is a message.
         </div>
 
-        <!-- Name Input View (Initially visible but disabled) -->
+        <!-- Name Input View -->
         <div id="name-view">
             <div class="bg-white p-8 rounded-xl shadow-lg text-center">
                 <h1 class="text-3xl font-bold mb-6 text-gray-700">Chào mừng bạn đến với Cược Xúc Xắc</h1>
                 <label for="player-name" class="block text-lg font-medium mb-2">Nhập tên của bạn để bắt đầu</label>
-                <input type="text" id="player-name" class="w-full max-w-sm mx-auto p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition disabled:bg-gray-200" disabled>
-                <button id="submit-name-btn" class="mt-6 bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-all duration-300 shadow-md disabled:opacity-50 disabled:cursor-not-allowed" disabled>Vào Sảnh Chờ</button>
-                 <div class="mt-4 text-sm text-gray-500">
-                    <p>UserID của bạn: <span id="user-id-display" class="font-mono">Đang tải...</span></p>
-                    <p>Đây là mã định danh duy nhất của bạn để chơi game.</p>
-                </div>
+                <input type="text" id="player-name" class="w-full max-w-sm mx-auto p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                <button id="submit-name-btn" class="mt-6 bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-all duration-300 shadow-md">Vào Sảnh Chờ</button>
             </div>
         </div>
         
@@ -169,7 +165,7 @@
     <script type="module">
         // Import Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- DO NOT EDIT ---
@@ -182,6 +178,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+
 
         // App State
         let userId = null;
@@ -197,7 +194,6 @@
         const gameView = document.getElementById('game-view');
         const playerNameInput = document.getElementById('player-name');
         const submitNameBtn = document.getElementById('submit-name-btn');
-        const userIdDisplay = document.getElementById('user-id-display');
         const roomList = document.getElementById('room-list');
 
         const gameStatus = document.getElementById('game-status');
@@ -222,53 +218,26 @@
             }, 3000);
         }
 
-        // --- AUTHENTICATION & INITIALIZATION ---
-        function handleUserLogin(user) {
-            userId = user.uid;
-            userIdDisplay.textContent = userId;
-            console.log("Authenticated User ID:", userId);
-            
-            // Enable controls on the name view
-            playerNameInput.disabled = false;
-            submitNameBtn.disabled = false;
-        }
-
-        function handleUserLogout() {
-            userId = null;
-            console.log("User is not signed in.");
-
-            // Keep controls disabled
-            playerNameInput.disabled = true;
-            submitNameBtn.disabled = true;
-
-            // Hide all game-related views
-            lobbyView.classList.add('hidden');
-            gameView.classList.add('hidden');
-            
-            showNotification("Không thể xác thực. Vui lòng làm mới trang.");
-        }
-        
-        async function initializeAppSequence() {
+        // --- INITIALIZATION ---
+        function initializeAppSequence() {
             onAuthStateChanged(auth, (user) => {
                 if (user) {
-                    handleUserLogin(user);
+                    userId = user.uid;
+                    console.log("Authenticated with User ID:", userId);
+                    // Auth is ready, app can proceed.
                 } else {
-                    // This can be called if signIn fails or on initial load.
-                    // The error is handled in the catch block of the signIn attempt.
+                    // This case is unlikely with anonymous auth unless there's a serious issue.
+                    showNotification("Lỗi xác thực. Vui lòng làm mới trang.");
                 }
             });
 
-            try {
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Firebase Authentication Error:", error);
-                handleUserLogout();
-            }
+            // Sign in anonymously to get a session UID for Firestore rules
+            signInAnonymously(auth).catch((error) => {
+                console.error("Anonymous sign-in failed:", error);
+                showNotification("Không thể kết nối đến máy chủ trò chơi.");
+            });
         }
+
 
         // --- LOBBY LOGIC ---
         function showLobby() {
@@ -279,6 +248,10 @@
         }
         
         submitNameBtn.addEventListener('click', () => {
+            if (!userId) {
+                showNotification("Đang kết nối, vui lòng thử lại sau giây lát.");
+                return;
+            }
             const name = playerNameInput.value.trim();
             if (name) {
                 playerName = name;
@@ -298,6 +271,9 @@
                     roomsData[doc.id] = doc.data();
                 });
                 renderRooms(roomsData);
+            }, (error) => {
+                console.error("Firestore listen error on lobby:", error);
+                showNotification("Mất kết nối với sảnh chờ.");
             });
         }
 
@@ -440,6 +416,10 @@
                     showNotification("Phòng không còn tồn tại. Quay trở lại sảnh chờ.", false);
                     leaveRoom();
                 }
+            }, (error) => {
+                console.error("Firestore listen error on room:", error);
+                showNotification("Mất kết nối với phòng chơi.");
+                leaveRoom();
             });
         }
         
