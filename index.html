@@ -82,13 +82,13 @@
             This is a message.
         </div>
 
-        <!-- Name Input View -->
+        <!-- Name Input View (Initially visible but disabled) -->
         <div id="name-view">
             <div class="bg-white p-8 rounded-xl shadow-lg text-center">
                 <h1 class="text-3xl font-bold mb-6 text-gray-700">Chào mừng bạn đến với Cược Xúc Xắc</h1>
                 <label for="player-name" class="block text-lg font-medium mb-2">Nhập tên của bạn để bắt đầu</label>
-                <input type="text" id="player-name" class="w-full max-w-sm mx-auto p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
-                <button id="submit-name-btn" class="mt-6 bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-all duration-300 shadow-md">Vào Sảnh Chờ</button>
+                <input type="text" id="player-name" class="w-full max-w-sm mx-auto p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition disabled:bg-gray-200" disabled>
+                <button id="submit-name-btn" class="mt-6 bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-all duration-300 shadow-md disabled:opacity-50 disabled:cursor-not-allowed" disabled>Vào Sảnh Chờ</button>
                  <div class="mt-4 text-sm text-gray-500">
                     <p>UserID của bạn: <span id="user-id-display" class="font-mono">Đang tải...</span></p>
                     <p>Đây là mã định danh duy nhất của bạn để chơi game.</p>
@@ -222,22 +222,51 @@
             }, 3000);
         }
 
-        // --- AUTHENTICATION ---
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                userId = user.uid;
-                userIdDisplay.textContent = userId;
-                console.log("Authenticated User ID:", userId);
-            } else {
-                console.log("User is not signed in.");
-            }
-        });
+        // --- AUTHENTICATION & INITIALIZATION ---
+        function handleUserLogin(user) {
+            userId = user.uid;
+            userIdDisplay.textContent = userId;
+            console.log("Authenticated User ID:", userId);
+            
+            // Enable controls on the name view
+            playerNameInput.disabled = false;
+            submitNameBtn.disabled = false;
+        }
+
+        function handleUserLogout() {
+            userId = null;
+            console.log("User is not signed in.");
+
+            // Keep controls disabled
+            playerNameInput.disabled = true;
+            submitNameBtn.disabled = true;
+
+            // Hide all game-related views
+            lobbyView.classList.add('hidden');
+            gameView.classList.add('hidden');
+            
+            showNotification("Không thể xác thực. Vui lòng làm mới trang.");
+        }
         
-        async function authenticateUser() {
-             if (initialAuthToken) {
-                await signInWithCustomToken(auth, initialAuthToken);
-            } else {
-                await signInAnonymously(auth);
+        async function initializeAppSequence() {
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    handleUserLogin(user);
+                } else {
+                    // This can be called if signIn fails or on initial load.
+                    // The error is handled in the catch block of the signIn attempt.
+                }
+            });
+
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Firebase Authentication Error:", error);
+                handleUserLogout();
             }
         }
 
@@ -305,7 +334,6 @@
                 return;
             }
 
-            // Stop listening to lobby updates when joining a room
             if (lobbyUnsubscribe) {
                 lobbyUnsubscribe();
                 lobbyUnsubscribe = null;
@@ -327,7 +355,7 @@
                     } else {
                         const data = roomDoc.data();
                         if (data.playerIds.length >= 2) throw new Error("Phòng đã đầy!");
-                        if (data.playerIds.includes(userId)) return; // Already in room
+                        if (data.playerIds.includes(userId)) return;
                         
                         const newPlayerIds = [...data.playerIds, userId];
                         const newPlayers = { ...data.players, [userId]: { name: playerName, score: 0 } };
@@ -350,7 +378,7 @@
                 console.error("Failed to join room: ", e);
                 showNotification(e.message);
                 currentRoomId = null;
-                showLobby(); // Go back to lobby on failure
+                showLobby();
             }
         }
         
@@ -403,7 +431,6 @@
             
             const roomDocRef = doc(db, 'artifacts', appId, 'public/data/rooms', currentRoomId);
             roomUnsubscribe = onSnapshot(roomDocRef, (doc) => {
-                // Only act if we are supposed to be in a room
                 if (!hasJoinedRoom) return;
 
                 if (doc.exists()) {
@@ -569,7 +596,7 @@
 
                     const roomDocRef = doc(db, 'artifacts', appId, 'public/data/rooms', currentRoomId);
                     const currentDoc = await getDoc(roomDocRef);
-                    if (!currentDoc.exists()) return; // Room was left during roll
+                    if (!currentDoc.exists()) return;
                     const currentData = currentDoc.data();
 
                     const p1_id = currentData.playerIds[0];
@@ -688,18 +715,9 @@
             });
         }
 
-        // --- INITIALIZATION ---
-        async function init() {
-            try {
-                await authenticateUser();
-                if(!userId) throw new Error("Authentication failed. Cannot get User ID.");
-            } catch (error) {
-                 console.error(error);
-                 showNotification("Không thể xác thực. Vui lòng làm mới trang.");
-            }
-        }
+        // Start the application
+        initializeAppSequence();
 
-        init();
     </script>
 </body>
 </html>
