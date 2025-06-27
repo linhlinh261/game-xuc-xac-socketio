@@ -278,7 +278,6 @@
             myPlayerId = 1;
             gameState = decodedState;
             gameState.p[1].n = name;
-            gameState.st = 'c';
             startGame();
         });
         
@@ -323,29 +322,36 @@
             diceRollView.classList.add('hidden');
             resultView.classList.add('hidden');
             
-            let myTurn = (gameState.st === 'c' && !me.c) || (gameState.st === 'b' && gameState.t === myPlayerId);
-            let isMyTurnToPlayAgain = (gameState.st === 'f' && !me.a);
-            myTurn = myTurn || isMyTurnToPlayAgain;
-            
+            const isMyTurn = (gameState.st === 'c' && !me.c) || 
+                             (gameState.st === 'b' && gameState.t === myPlayerId) ||
+                             (gameState.st === 'f' && !me.a);
+
             let showCodeOutput = false;
-            let showCodeInput = false;
+            let showCodeInput = !isMyTurn;
 
             switch(gameState.st) { 
                 case 'w':
-                    gameStatus.textContent = 'Đang chờ người chơi thứ hai...';
-                    instructionText.textContent = "Gửi mã này cho đối thủ. Sau khi họ tham gia, họ sẽ gửi lại mã mới cho bạn.";
-                    showCodeOutput = true;
-                    showCodeInput = true; 
+                    if (myPlayerId === 0) {
+                        gameStatus.textContent = `Đang chờ ${gameState.p[1].n}...`;
+                        instructionText.textContent = "Gửi mã này cho đối thủ. Sau khi họ tham gia, họ sẽ gửi lại mã mới cho bạn.";
+                        showCodeOutput = true;
+                        showCodeInput = true; 
+                    } else {
+                        gameStatus.textContent = `Bạn đã tham gia! Chào mừng, ${me.n}!`;
+                        instructionText.textContent = `Gửi mã này lại cho ${opponent.n} để bắt đầu ván chơi.`;
+                        showCodeOutput = true;
+                        showCodeInput = false;
+                    }
                     break;
                 case 'c':
                     handleRPSUI(me, opponent);
-                    showCodeOutput = !!me.c; // Show code after I make a choice
-                    showCodeInput = !myTurn;
+                    showCodeOutput = !isMyTurn;
+                    showCodeInput = !isMyTurn;
                     break;
                  case 'b':
                     handleBettingUI(me, opponent);
-                    showCodeOutput = !!me.b; // Show code after I make a choice
-                    showCodeInput = !myTurn;
+                    showCodeOutput = !isMyTurn;
+                    showCodeInput = !isMyTurn;
                     break;
                 case 'r':
                     handleRollingUI();
@@ -354,8 +360,8 @@
                     break;
                 case 'f':
                     handleResultUI(me);
-                    showCodeOutput = true; // Always show code at result screen
-                    showCodeInput = !myTurn;
+                    showCodeOutput = true;
+                    showCodeInput = !isMyTurn;
                     instructionText.textContent = "Ván chơi kết thúc! Gửi mã cho đối thủ để họ xem kết quả hoặc chơi lại.";
                     break;
             }
@@ -561,6 +567,11 @@
             if (!decodedState || !decodedState.p) {
                 showNotification("Mã không hợp lệ hoặc sao chép bị lỗi.");
                 return;
+            }
+            
+            // FIXED: Start the game for P1 when they receive P2's confirmation code
+            if (gameState.st === 'w' && decodedState.st === 'w' && decodedState.p[1].n !== 'Đang chờ...') {
+                 decodedState.st = 'c'; // Start the RPS round
             }
             
             gameState = decodedState;
