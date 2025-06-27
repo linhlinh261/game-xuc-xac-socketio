@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trò Chơi Cược Xúc Xắc (Offline)</title>
+    <title>Trò Chơi Xúc Xắc </title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
@@ -197,17 +197,11 @@
             setTimeout(() => toast.classList.add('opacity-0'), 3000);
         }
 
-        // --- Encoding/Decoding functions with compression ---
         function encodeState(state) {
             try {
                 const jsonString = JSON.stringify(state);
-                // pako.deflate returns a Uint8Array. We need to convert it to a binary string for btoa.
-                const compressed = pako.deflate(jsonString);
-                let binaryString = '';
-                for (let i = 0; i < compressed.length; i++) {
-                    binaryString += String.fromCharCode(compressed[i]);
-                }
-                return btoa(binaryString);
+                const compressed = pako.deflate(jsonString, { to: 'string' });
+                return btoa(compressed);
             } catch (e) {
                 console.error("Lỗi mã hóa:", e);
                 return '';
@@ -217,20 +211,13 @@
         function decodeState(encodedState) {
             try {
                 const binaryString = atob(encodedState);
-                const len = binaryString.length;
-                const bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
-                }
-                // pako.inflate takes a Uint8Array.
-                const jsonString = pako.inflate(bytes, { to: 'string' });
+                const jsonString = pako.inflate(binaryString, { to: 'string' });
                 return JSON.parse(jsonString);
             } catch (e) {
                 console.error("Lỗi giải mã:", e);
                 return null;
             }
         }
-
 
         function createDiceDots(face) {
             let dots = '';
@@ -277,7 +264,6 @@
             }
 
             const decodedState = decodeState(code);
-            // IMPROVED CHECK: Provide better feedback
             if (!decodedState) {
                 showNotification("Mã không hợp lệ hoặc sao chép bị lỗi. Vui lòng thử lại.");
                 return;
@@ -339,33 +325,41 @@
             myTurn = myTurn || isMyTurnToPlayAgain;
             
             let showCodeOutput = false;
-            
-            switch(gameState.st) { // st: state
-                case 'w': // waiting
+            let showCodeInput = false;
+
+            switch(gameState.st) { 
+                case 'w':
                     gameStatus.textContent = 'Đang chờ người chơi thứ hai...';
-                    instructionText.textContent = "Gửi mã này cho đối thủ của bạn để họ tham gia:";
+                    instructionText.textContent = "Gửi mã này cho đối thủ. Sau khi họ tham gia, họ sẽ gửi lại mã mới cho bạn.";
                     showCodeOutput = true;
+                    showCodeInput = true; 
                     break;
-                case 'c': // coinToss
+                case 'c':
                     handleCoinTossUI(me, opponent);
                     showCodeOutput = !!me.c; 
+                    showCodeInput = !myTurn;
                     break;
-                 case 'b': // betting
+                 case 'b':
                     handleBettingUI(me, opponent);
                     showCodeOutput = !!me.b;
+                    showCodeInput = !myTurn;
                     break;
-                case 'r': // rolling
+                case 'r':
                     handleRollingUI();
+                    showCodeInput = myPlayerId === 1; // P2 needs to paste the result code
                     break;
-                case 'f': // finished/result
+                case 'f':
                     handleResultUI(me);
                     showCodeOutput = true;
+                    showCodeInput = !myTurn;
                     instructionText.textContent = "Ván chơi kết thúc! Gửi mã cho đối thủ để họ xem kết quả hoặc chơi lại.";
                     break;
             }
 
-            codeSharingArea.style.display = showCodeOutput || pasteCodeSection.style.display === 'block' ? 'block' : 'none';
-            pasteCodeSection.style.display = !myTurn && gameState.st !== 'w' && gameState.st !== 'r' ? 'block' : 'none';
+            codeSharingArea.style.display = 'block';
+            pasteCodeSection.style.display = showCodeInput ? 'block' : 'none';
+            gameCodeOutput.parentElement.style.display = showCodeOutput ? 'block' : 'none';
+
             if (showCodeOutput) {
                 gameCodeOutput.value = encodeState(gameState);
                 gameCodeOutput.onclick = () => {
@@ -381,7 +375,6 @@
             coinTossView.classList.remove('hidden');
             if(me.c) {
                 gameStatus.textContent = `Đã chọn. Đang chờ ${opponent.n}...`;
-                // IMPROVED INSTRUCTION
                 instructionText.textContent = `Bạn đã chọn. Gửi mã này cho đối thủ của bạn để họ đi lượt của mình.`;
                 coinTossView.classList.add('hidden');
             } else {
@@ -396,7 +389,6 @@
                 gameStatus.textContent = 'Đến lượt bạn! Hãy chọn một số.';
             } else {
                 gameStatus.textContent = `Đã cược. Đang chờ ${opponent.n}...`;
-                // IMPROVED INSTRUCTION
                 instructionText.textContent = `Bạn đã cược. Gửi mã này cho đối thủ của bạn để họ đi lượt của mình.`;
             }
         }
@@ -407,7 +399,7 @@
             document.getElementById('rolling-text').textContent = "Đang tung xúc xắc...";
             animateDice();
             
-            if (myPlayerId === 0) { // Player 1 rolls
+            if (myPlayerId === 0) {
                  setTimeout(rollDice, 2500);
             } else {
                 instructionText.textContent = "Đối thủ đang tung xúc xắc. Hãy chờ mã kết quả từ họ.";
@@ -433,7 +425,7 @@
             const winnerId = gameState.rw;
             if (winnerId === 0) {
                 winnerText.textContent = 'Không ai đoán trúng!';
-            } else if (winnerId === 3) { // 3 means tie
+            } else if (winnerId === 3) {
                 winnerText.textContent = 'Cả hai người chơi đều đoán trúng!';
             } else {
                 const winnerName = gameState.p[winnerId - 1].n;
@@ -501,7 +493,6 @@
              gameState.p[myPlayerId].a = 1;
              
              if (gameState.p[0].a && gameState.p[1].a) {
-                 // Reset for new round
                  gameState.st = 'c';
                  gameState.t = 0; gameState.cw = 0; gameState.dr = 0; gameState.rw = 0; gameState.df = 0;
                  gameState.p[0] = {...gameState.p[0], c: 0, b: 0, a: 0};
@@ -523,14 +514,15 @@
             }
             
             const myCurrentName = gameState.p[myPlayerId].n;
-            
+            const opponentName = gameState.p[1-myPlayerId].n;
+
             gameState = decodedState;
-            // Restore my name and opponent's name from my local state
-            // to prevent name-spoofing
+
             gameState.p[myPlayerId].n = myCurrentName;
-            gameState.p[1-myPlayerId].n = document.getElementById('player-2-info').querySelector('h3').textContent.replace(' (Bạn)','');
-
-
+            if (gameState.st !== 'w') { // If it's not a new game join, restore opponent name
+                 gameState.p[1-myPlayerId].n = opponentName;
+            }
+            
             gameCodeInput.value = '';
             updateUI();
         });
