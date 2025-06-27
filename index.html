@@ -6,6 +6,7 @@
     <title>Trò Chơi Cược Xúc Xắc (Offline)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -119,12 +120,15 @@
 
                 <!-- Main Game Area -->
                 <div id="main-game-area" class="mt-6">
-                    <div id="coin-toss-view" class="hidden text-center">
-                        <h3 class="text-lg font-medium mb-4">Tung đồng xu để quyết định ai đi trước! Chọn một mặt:</h3>
-                        <div class="flex justify-center gap-4">
-                            <button id="heads-btn" class="bg-gray-700 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-800 transition text-lg">Sấp</button>
-                            <button id="tails-btn" class="bg-yellow-400 text-black font-bold py-3 px-6 rounded-lg hover:bg-yellow-500 transition text-lg">Ngửa</button>
+                    <div id="rps-view" class="hidden text-center">
+                        <h3 id="rps-title" class="text-lg font-medium mb-4">Oẳn tù xì để quyết định ai đi trước!</h3>
+                        <div id="rps-choices" class="flex justify-center gap-4">
+                            <button id="rock-btn" data-choice="r" class="text-5xl p-4 rounded-lg hover:bg-gray-200 transition">✊</button>
+                            <button id="paper-btn" data-choice="p" class="text-5xl p-4 rounded-lg hover:bg-gray-200 transition">✋</button>
+                            <button id="scissors-btn" data-choice="s" class="text-5xl p-4 rounded-lg hover:bg-gray-200 transition">✂️</button>
                         </div>
+                        <div id="rps-result-text" class="mt-4 text-2xl font-bold"></div>
+                        <button id="continue-btn" class="hidden mt-4 bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700">Tiếp Tục</button>
                     </div>
                     <div id="betting-view" class="hidden">
                         <div id="betting-board" class="flex flex-wrap justify-center gap-3"></div>
@@ -171,7 +175,7 @@
         const joinGameBtn = document.getElementById('join-game-btn');
         const quitGameBtn = document.getElementById('quit-game-btn');
         const gameStatus = document.getElementById('game-status');
-        const coinTossView = document.getElementById('coin-toss-view');
+        const rpsView = document.getElementById('rps-view');
         const bettingView = document.getElementById('betting-view');
         const diceRollView = document.getElementById('dice-roll-view');
         const resultView = document.getElementById('result-view');
@@ -182,6 +186,9 @@
         const pasteCodeSection = document.getElementById('paste-code-section');
         const gameCodeInput = document.getElementById('game-code-input');
         const loadCodeBtn = document.getElementById('load-code-btn');
+        const rpsChoices = document.getElementById('rps-choices');
+        const rpsResultText = document.getElementById('rps-result-text');
+        const continueBtn = document.getElementById('continue-btn');
 
         // --- App State ---
         let gameState = {};
@@ -196,11 +203,9 @@
             setTimeout(() => toast.classList.add('opacity-0'), 3000);
         }
 
-        // --- FIXED Encoding/Decoding functions ---
         function encodeState(state) {
             try {
                 const jsonString = JSON.stringify(state);
-                // Handle Unicode characters correctly before encoding
                 return btoa(unescape(encodeURIComponent(jsonString)));
             } catch (e) {
                 console.error("Lỗi mã hóa:", e);
@@ -210,7 +215,6 @@
 
         function decodeState(encodedState) {
             try {
-                // Decode base64 and then decode URI component to get original string
                 const jsonString = decodeURIComponent(escape(atob(encodedState)));
                 return JSON.parse(jsonString);
             } catch (e) {
@@ -236,12 +240,10 @@
             }
             myPlayerId = 0;
             gameState = {
-                // p: players, n: name, s: score, c: coinTossChoice, b: diceBet, a: wantsToPlayAgain
                 p: [
                     { n: name, s: 0, c: null, b: null, a: false },
                     { n: 'Đang chờ...', s: 0, c: null, b: null, a: false }
                 ],
-                // st: state, t: turn, cw: coinTossWinner, dr: diceResult, rw: roundWinner, df: diceFaces
                 st: 'w', t: null, cw: null, dr: null, rw: null, df: null
             };
             startGame();
@@ -276,7 +278,7 @@
             myPlayerId = 1;
             gameState = decodedState;
             gameState.p[1].n = name;
-            gameState.st = 'c'; // 'c' for coinToss
+            gameState.st = 'c';
             startGame();
         });
         
@@ -302,6 +304,7 @@
             const me = gameState.p[myPlayerId];
             const opponent = gameState.p[1 - myPlayerId];
             
+            const rpsMap = { r: '✊', p: '✋', s: '✂️' };
             const updatePlayerBox = (elementId, playerData, isMe) => {
                  const box = document.getElementById(elementId);
                  if (!playerData) return;
@@ -309,13 +312,13 @@
                     <h3 class="text-lg font-bold">${playerData.n} ${isMe ? '(Bạn)' : ''}</h3>
                     <p class="text-2xl font-black text-indigo-600">${playerData.s} Điểm</p>
                     ${playerData.b ? `<p class="mt-1">Đã cược: <span class="font-bold">${playerData.b}</span></p>` : ''}
-                    ${playerData.c ? `<p class="mt-1">Chọn đồng xu: <span class="font-bold capitalize">${playerData.c === 'h' ? 'Sấp' : 'Ngửa'}</span></p>` : ''}
+                    ${playerData.c ? `<p class="mt-1">Ra: <span class="text-2xl">${rpsMap[playerData.c]}</span></p>` : ''}
                  `;
             };
             updatePlayerBox('player-1-info', gameState.p[0], myPlayerId === 0);
             updatePlayerBox('player-2-info', gameState.p[1], myPlayerId === 1);
 
-            coinTossView.classList.add('hidden');
+            rpsView.classList.add('hidden');
             bettingView.classList.add('hidden');
             diceRollView.classList.add('hidden');
             resultView.classList.add('hidden');
@@ -325,7 +328,7 @@
             myTurn = myTurn || isMyTurnToPlayAgain;
             
             let showCodeOutput = false;
-            let showCodeInput = false;
+            let showCodeInput = !myTurn;
 
             switch(gameState.st) { 
                 case 'w':
@@ -335,18 +338,16 @@
                     showCodeInput = true; 
                     break;
                 case 'c':
-                    handleCoinTossUI(me, opponent);
-                    showCodeOutput = !!me.c; 
-                    showCodeInput = !myTurn;
+                    handleRPSUI(me, opponent);
                     break;
                  case 'b':
                     handleBettingUI(me, opponent);
-                    showCodeOutput = !!me.b;
-                    showCodeInput = !myTurn;
+                    showCodeOutput = !myTurn;
                     break;
                 case 'r':
                     handleRollingUI();
-                    showCodeInput = myPlayerId === 1; 
+                    showCodeInput = myPlayerId === 1;
+                    showCodeOutput = myPlayerId === 0;
                     break;
                 case 'f':
                     handleResultUI(me);
@@ -371,14 +372,38 @@
         }
         
         // --- Game State UI Handlers ---
-        function handleCoinTossUI(me, opponent) {
-            coinTossView.classList.remove('hidden');
-            if(me.c) {
+        function handleRPSUI(me, opponent) {
+            rpsView.classList.remove('hidden');
+            rpsResultText.textContent = '';
+            continueBtn.classList.add('hidden');
+            rpsChoices.classList.remove('hidden');
+
+            if(me.c && opponent.c) { // Both players have chosen
+                rpsChoices.classList.add('hidden');
+                continueBtn.classList.remove('hidden');
+
+                const rpsMap = { r: 'Búa ✊', p: 'Bao ✋', s: 'Kéo ✂️' };
+                const p1c = gameState.p[0].c;
+                const p2c = gameState.p[1].c;
+                let resultString;
+                
+                const winner = determineRPSWinner();
+                if (winner === -1) { // Tie
+                    resultString = `Hòa! Cả hai cùng ra ${rpsMap[p1c]}.`;
+                } else {
+                    const winnerName = gameState.p[winner].n;
+                    resultString = `${gameState.p[0].n} ra ${rpsMap[p1c]}, ${gameState.p[1].n} ra ${rpsMap[p2c]}. <span class="text-green-600">${winnerName} thắng!</span>`;
+                }
+                rpsResultText.innerHTML = resultString;
+                gameStatus.textContent = "Xem kết quả oẳn tù xì!";
+
+            } else if(me.c) {
                 gameStatus.textContent = `Đã chọn. Đang chờ ${opponent.n}...`;
                 instructionText.textContent = `Bạn đã chọn. Gửi mã này cho đối thủ của bạn để họ đi lượt của mình.`;
-                coinTossView.classList.add('hidden');
+                rpsChoices.classList.add('hidden');
             } else {
-                gameStatus.textContent = 'Đến lượt bạn! Hãy chọn Sấp hoặc Ngửa.';
+                gameStatus.textContent = 'Đến lượt bạn! Hãy ra Kéo, Búa, hoặc Bao.';
+                instructionText.textContent = ``;
             }
         }
         
@@ -387,6 +412,7 @@
             renderBettingBoard();
              if (gameState.t === myPlayerId) {
                 gameStatus.textContent = 'Đến lượt bạn! Hãy chọn một số.';
+                 instructionText.textContent = ``;
             } else {
                 gameStatus.textContent = `Đã cược. Đang chờ ${opponent.n}...`;
                 instructionText.textContent = `Bạn đã cược. Gửi mã này cho đối thủ của bạn để họ đi lượt của mình.`;
@@ -401,6 +427,7 @@
             
             if (myPlayerId === 0) {
                  setTimeout(rollDice, 2500);
+                 instructionText.textContent = `Đang tung xúc xắc...`;
             } else {
                 instructionText.textContent = "Đối thủ đang tung xúc xắc. Hãy chờ mã kết quả từ họ.";
             }
@@ -423,12 +450,12 @@
             
             const winnerText = document.getElementById('winner-text');
             const winnerId = gameState.rw;
-            if (winnerId === 0) {
+            if (winnerId === null) {
                 winnerText.textContent = 'Không ai đoán trúng!';
-            } else if (winnerId === 3) {
+            } else if (winnerId === -1) {
                 winnerText.textContent = 'Cả hai người chơi đều đoán trúng!';
             } else {
-                const winnerName = gameState.p[winnerId - 1].n;
+                const winnerName = gameState.p[winnerId].n;
                 winnerText.textContent = `${winnerName} đã thắng vòng này!`;
             }
 
@@ -442,20 +469,40 @@
         }
         
         // --- Game Actions ---
-        document.getElementById('heads-btn').onclick = () => selectCoinToss('h');
-        document.getElementById('tails-btn').onclick = () => selectCoinToss('t');
-        
-        function selectCoinToss(choice) {
-            gameState.p[myPlayerId].c = choice;
-            
-            if (gameState.p[0].c && gameState.p[1].c) {
-                const coinResult = Math.random() < 0.5 ? 'h' : 't';
-                gameState.cw = gameState.p[0].c === coinResult ? 0 : 1;
-                gameState.t = gameState.cw;
-                gameState.st = 'b';
+        rpsChoices.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                selectRPS(e.target.dataset.choice);
             }
+        });
+
+        function selectRPS(choice) {
+            gameState.p[myPlayerId].c = choice;
             updateUI();
         }
+
+        function determineRPSWinner() {
+            const p1c = gameState.p[0].c;
+            const p2c = gameState.p[1].c;
+            if (p1c === p2c) return -1; // Tie
+            if ((p1c === 'r' && p2c === 's') || (p1c === 's' && p2c === 'p') || (p1c === 'p' && p2c === 'r')) {
+                return 0; // P1 wins
+            }
+            return 1; // P2 wins
+        }
+
+        continueBtn.addEventListener('click', () => {
+            const winner = determineRPSWinner();
+            if (winner === -1) { // Tie, play again
+                gameState.p[0].c = null;
+                gameState.p[1].c = null;
+                updateUI();
+            } else { // Winner found, proceed to betting
+                gameState.st = 'b';
+                gameState.t = winner;
+                gameState.cw = winner;
+                updateUI();
+            }
+        });
         
         function placeBet(number) {
             gameState.p[myPlayerId].b = number;
@@ -483,8 +530,8 @@
             gameState.df = [die1, die2];
             gameState.dr = total;
             gameState.st = 'f';
-            // rw: 0=none, 1=p1, 2=p2, 3=tie
-            gameState.rw = p1Won && p2Won ? 3 : (p1Won ? 1 : (p2Won ? 2 : 0));
+            // rw: null=none, -1=tie, 0=p1, 1=p2
+            gameState.rw = p1Won && p2Won ? -1 : (p1Won ? 0 : (p2Won ? 1 : null));
             
             updateUI();
         }
