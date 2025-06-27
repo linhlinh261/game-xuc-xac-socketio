@@ -147,15 +147,18 @@
                     </div>
                 </div>
                 
-                <!-- Code Sharing Area -->
-                <div id="code-sharing-area" class="hidden mt-6 border-t pt-4 text-center">
-                    <h3 class="text-lg font-bold text-gray-700">Mã Ván Chơi</h3>
-                    <p id="instruction-text" class="mb-2 text-gray-600"></p>
-                    <textarea id="game-code-output" rows="3" readonly class="w-full max-w-lg mx-auto p-2 border-2 bg-gray-100 border-gray-300 rounded-lg cursor-pointer"></textarea>
-                    <div id="paste-code-section" class="hidden mt-4">
-                        <label for="game-code-input" class="block text-lg font-medium mb-2">Dán mã của đối thủ vào đây:</label>
-                        <textarea id="game-code-input" rows="3" class="w-full max-w-lg mx-auto p-2 border-2 border-gray-300 rounded-lg"></textarea>
-                        <button id="load-code-btn" class="mt-2 bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition">Tải Lượt Chơi</button>
+                <!-- NEW Code Sharing Area -->
+                <div id="code-sharing-area" class="hidden mt-6 border-t pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-700">Mã Lượt Đi Của Bạn</h3>
+                        <p class="text-sm text-gray-500 mb-2">Sao chép và gửi mã này cho đối thủ.</p>
+                        <textarea id="my-code-output" rows="3" readonly class="w-full p-2 border-2 bg-gray-100 border-gray-300 rounded-lg cursor-pointer"></textarea>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-700">Nhập Mã Của Đối Thủ</h3>
+                        <p class="text-sm text-gray-500 mb-2">Dán mã bạn nhận được vào đây.</p>
+                        <textarea id="opponent-code-input" rows="3" class="w-full p-2 border-2 border-gray-300 rounded-lg"></textarea>
+                        <button id="load-code-btn" class="mt-2 w-full bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition">Tải Lượt Chơi</button>
                     </div>
                 </div>
             </div>
@@ -181,10 +184,8 @@
         const resultView = document.getElementById('result-view');
         const playAgainBtn = document.getElementById('play-again-btn');
         const codeSharingArea = document.getElementById('code-sharing-area');
-        const instructionText = document.getElementById('instruction-text');
-        const gameCodeOutput = document.getElementById('game-code-output');
-        const pasteCodeSection = document.getElementById('paste-code-section');
-        const gameCodeInput = document.getElementById('game-code-input');
+        const myCodeOutput = document.getElementById('my-code-output');
+        const opponentCodeInput = document.getElementById('opponent-code-input');
         const loadCodeBtn = document.getElementById('load-code-btn');
         const rpsChoices = document.getElementById('rps-choices');
         const rpsResultText = document.getElementById('rps-result-text');
@@ -325,59 +326,33 @@
             const isMyTurn = (gameState.st === 'c' && !me.c) || 
                              (gameState.st === 'b' && gameState.t === myPlayerId) ||
                              (gameState.st === 'f' && !me.a);
-
-            let showCodeOutput = false;
-            let showCodeInput = !isMyTurn;
+            
+            loadCodeBtn.disabled = isMyTurn;
 
             switch(gameState.st) { 
                 case 'w':
                     if (myPlayerId === 0) {
                         gameStatus.textContent = `Đang chờ ${gameState.p[1].n}...`;
-                        instructionText.textContent = "Gửi mã này cho đối thủ. Sau khi họ tham gia, họ sẽ gửi lại mã mới cho bạn.";
-                        showCodeOutput = true;
-                        showCodeInput = true; 
                     } else {
-                        gameStatus.textContent = `Bạn đã tham gia! Chào mừng, ${me.n}!`;
-                        instructionText.textContent = `Gửi mã này lại cho ${opponent.n} để bắt đầu ván chơi.`;
-                        showCodeOutput = true;
-                        showCodeInput = false;
+                        gameStatus.textContent = `Bạn đã tham gia! Gửi mã bên dưới cho đối thủ của bạn.`;
                     }
                     break;
                 case 'c':
                     handleRPSUI(me, opponent);
-                    showCodeOutput = !isMyTurn;
-                    showCodeInput = !isMyTurn;
                     break;
                  case 'b':
                     handleBettingUI(me, opponent);
-                    showCodeOutput = !isMyTurn;
-                    showCodeInput = !isMyTurn;
                     break;
                 case 'r':
                     handleRollingUI();
-                    showCodeInput = myPlayerId === 1;
-                    showCodeOutput = myPlayerId === 0;
                     break;
                 case 'f':
                     handleResultUI(me);
-                    showCodeOutput = true;
-                    showCodeInput = !isMyTurn;
-                    instructionText.textContent = "Ván chơi kết thúc! Gửi mã cho đối thủ để họ xem kết quả hoặc chơi lại.";
                     break;
             }
 
-            codeSharingArea.style.display = 'block';
-            pasteCodeSection.style.display = showCodeInput ? 'block' : 'none';
-            gameCodeOutput.parentElement.style.display = showCodeOutput ? 'block' : 'none';
-
-            if (showCodeOutput) {
-                gameCodeOutput.value = encodeState(gameState);
-                gameCodeOutput.onclick = () => {
-                    gameCodeOutput.select();
-                    try { document.execCommand('copy'); showNotification("Đã sao chép mã!"); } 
-                    catch (err) { showNotification("Lỗi sao chép!"); }
-                }
-            }
+            codeSharingArea.classList.remove('hidden');
+            myCodeOutput.value = encodeState(gameState);
         }
         
         // --- Game State UI Handlers ---
@@ -408,11 +383,9 @@
 
             } else if(me.c) {
                 gameStatus.textContent = `Đã chọn. Đang chờ ${opponent.n}...`;
-                instructionText.textContent = `Bạn đã chọn. Gửi mã này cho đối thủ của bạn để họ đi lượt của mình.`;
                 rpsChoices.classList.add('hidden');
             } else {
                 gameStatus.textContent = 'Đến lượt bạn! Hãy ra Kéo, Búa, hoặc Bao.';
-                instructionText.textContent = ``;
             }
         }
         
@@ -421,10 +394,8 @@
             renderBettingBoard();
              if (gameState.t === myPlayerId) {
                 gameStatus.textContent = 'Đến lượt bạn! Hãy chọn một số.';
-                 instructionText.textContent = ``;
             } else {
                 gameStatus.textContent = `Đã cược. Đang chờ ${opponent.n}...`;
-                instructionText.textContent = `Bạn đã cược. Gửi mã này cho đối thủ của bạn để họ đi lượt của mình.`;
             }
         }
 
@@ -436,9 +407,6 @@
             
             if (myPlayerId === 0) {
                  setTimeout(rollDice, 2500);
-                 instructionText.textContent = `Đang tung xúc xắc...`;
-            } else {
-                instructionText.textContent = "Đối thủ đang tung xúc xắc. Hãy chờ mã kết quả từ họ.";
             }
         }
         
@@ -558,7 +526,7 @@
         });
         
         loadCodeBtn.addEventListener('click', () => {
-            const code = gameCodeInput.value.trim();
+            const code = opponentCodeInput.value.trim();
             if (!code) {
                 showNotification("Vui lòng dán mã.");
                 return;
@@ -570,13 +538,13 @@
             }
             
             // FIXED: Start the game for P1 when they receive P2's confirmation code
-            if (gameState.st === 'w' && decodedState.st === 'w' && decodedState.p[1].n !== 'Đang chờ...') {
+            if (gameState.st === 'w' && decodedState.p[1].n !== 'Đang chờ...') {
                  decodedState.st = 'c'; // Start the RPS round
             }
             
             gameState = decodedState;
             
-            gameCodeInput.value = '';
+            opponentCodeInput.value = '';
             updateUI();
         });
 
