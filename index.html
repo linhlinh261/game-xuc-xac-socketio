@@ -312,7 +312,7 @@
                     <h3 class="text-lg font-bold">${playerData.n} ${isMe ? '(Bạn)' : ''}</h3>
                     <p class="text-2xl font-black text-indigo-600">${playerData.s} Điểm</p>
                     ${playerData.b ? `<p class="mt-1">Đã cược: <span class="font-bold">${playerData.b}</span></p>` : ''}
-                    ${playerData.c ? `<p class="mt-1">Ra: <span class="text-2xl">${rpsMap[playerData.c]}</span></p>` : ''}
+                    ${playerData.c ? `<p class="mt-1">Ra: <span class="text-2xl">${rpsMap[playerData.c] || '?'}</span></p>` : ''}
                  `;
             };
             updatePlayerBox('player-1-info', gameState.p[0], myPlayerId === 0);
@@ -328,7 +328,7 @@
             myTurn = myTurn || isMyTurnToPlayAgain;
             
             let showCodeOutput = false;
-            let showCodeInput = !myTurn;
+            let showCodeInput = false;
 
             switch(gameState.st) { 
                 case 'w':
@@ -339,10 +339,13 @@
                     break;
                 case 'c':
                     handleRPSUI(me, opponent);
+                    showCodeOutput = !!me.c; // Show code after I make a choice
+                    showCodeInput = !myTurn;
                     break;
                  case 'b':
                     handleBettingUI(me, opponent);
-                    showCodeOutput = !myTurn;
+                    showCodeOutput = !!me.b; // Show code after I make a choice
+                    showCodeInput = !myTurn;
                     break;
                 case 'r':
                     handleRollingUI();
@@ -351,7 +354,7 @@
                     break;
                 case 'f':
                     handleResultUI(me);
-                    showCodeOutput = true;
+                    showCodeOutput = true; // Always show code at result screen
                     showCodeInput = !myTurn;
                     instructionText.textContent = "Ván chơi kết thúc! Gửi mã cho đối thủ để họ xem kết quả hoặc chơi lại.";
                     break;
@@ -378,7 +381,7 @@
             continueBtn.classList.add('hidden');
             rpsChoices.classList.remove('hidden');
 
-            if(me.c && opponent.c) { // Both players have chosen
+            if(me.c && opponent.c) { 
                 rpsChoices.classList.add('hidden');
                 continueBtn.classList.remove('hidden');
 
@@ -388,8 +391,8 @@
                 let resultString;
                 
                 const winner = determineRPSWinner();
-                if (winner === -1) { // Tie
-                    resultString = `Hòa! Cả hai cùng ra ${rpsMap[p1c]}.`;
+                if (winner === -1) { 
+                    resultString = `Hòa! Cả hai cùng ra ${rpsMap[p1c]}. Chơi lại!`;
                 } else {
                     const winnerName = gameState.p[winner].n;
                     resultString = `${gameState.p[0].n} ra ${rpsMap[p1c]}, ${gameState.p[1].n} ra ${rpsMap[p2c]}. <span class="text-green-600">${winnerName} thắng!</span>`;
