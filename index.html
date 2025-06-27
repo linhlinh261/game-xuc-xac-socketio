@@ -305,14 +305,24 @@
             const opponent = gameState.p[1 - myPlayerId];
             
             const rpsMap = { r: '✊', p: '✋', s: '✂️' };
+            const showRPSResult = gameState.st === 'c' && gameState.p[0].c && gameState.p[1].c;
+
             const updatePlayerBox = (elementId, playerData, isMe) => {
                  const box = document.getElementById(elementId);
                  if (!playerData) return;
+                 let rpsDisplay = '';
+                 if (playerData.c) {
+                    if (showRPSResult) {
+                        rpsDisplay = `<p class="mt-1">Ra: <span class="text-2xl">${rpsMap[playerData.c]}</span></p>`;
+                    } else {
+                        rpsDisplay = `<p class="mt-1">Ra: <span class="text-xl font-bold">Đã chọn</span></p>`;
+                    }
+                 }
                  box.innerHTML = `
                     <h3 class="text-lg font-bold">${playerData.n} ${isMe ? '(Bạn)' : ''}</h3>
                     <p class="text-2xl font-black text-indigo-600">${playerData.s} Điểm</p>
                     ${playerData.b ? `<p class="mt-1">Đã cược: <span class="font-bold">${playerData.b}</span></p>` : ''}
-                    ${playerData.c ? `<p class="mt-1">Ra: <span class="text-2xl">${rpsMap[playerData.c] || '?'}</span></p>` : ''}
+                    ${rpsDisplay}
                  `;
             };
             updatePlayerBox('player-1-info', gameState.p[0], myPlayerId === 0);
