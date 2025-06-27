@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trò Chơi Xúc Xắc </title>
+    <title>Trò Chơi Cược Xúc Xắc (Offline)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -197,11 +196,12 @@
             setTimeout(() => toast.classList.add('opacity-0'), 3000);
         }
 
+        // --- FIXED Encoding/Decoding functions ---
         function encodeState(state) {
             try {
                 const jsonString = JSON.stringify(state);
-                const compressed = pako.deflate(jsonString, { to: 'string' });
-                return btoa(compressed);
+                // Handle Unicode characters correctly before encoding
+                return btoa(unescape(encodeURIComponent(jsonString)));
             } catch (e) {
                 console.error("Lỗi mã hóa:", e);
                 return '';
@@ -210,8 +210,8 @@
 
         function decodeState(encodedState) {
             try {
-                const binaryString = atob(encodedState);
-                const jsonString = pako.inflate(binaryString, { to: 'string' });
+                // Decode base64 and then decode URI component to get original string
+                const jsonString = decodeURIComponent(escape(atob(encodedState)));
                 return JSON.parse(jsonString);
             } catch (e) {
                 console.error("Lỗi giải mã:", e);
@@ -238,11 +238,11 @@
             gameState = {
                 // p: players, n: name, s: score, c: coinTossChoice, b: diceBet, a: wantsToPlayAgain
                 p: [
-                    { n: name, s: 0, c: 0, b: 0, a: 0 },
-                    { n: 'Đang chờ...', s: 0, c: 0, b: 0, a: 0 }
+                    { n: name, s: 0, c: null, b: null, a: false },
+                    { n: 'Đang chờ...', s: 0, c: null, b: null, a: false }
                 ],
                 // st: state, t: turn, cw: coinTossWinner, dr: diceResult, rw: roundWinner, df: diceFaces
-                st: 'w', t: 0, cw: 0, dr: 0, rw: 0, df: 0
+                st: 'w', t: null, cw: null, dr: null, rw: null, df: null
             };
             startGame();
         });
@@ -346,7 +346,7 @@
                     break;
                 case 'r':
                     handleRollingUI();
-                    showCodeInput = myPlayerId === 1; // P2 needs to paste the result code
+                    showCodeInput = myPlayerId === 1; 
                     break;
                 case 'f':
                     handleResultUI(me);
@@ -490,13 +490,13 @@
         }
         
         playAgainBtn.addEventListener('click', () => {
-             gameState.p[myPlayerId].a = 1;
+             gameState.p[myPlayerId].a = true;
              
              if (gameState.p[0].a && gameState.p[1].a) {
                  gameState.st = 'c';
-                 gameState.t = 0; gameState.cw = 0; gameState.dr = 0; gameState.rw = 0; gameState.df = 0;
-                 gameState.p[0] = {...gameState.p[0], c: 0, b: 0, a: 0};
-                 gameState.p[1] = {...gameState.p[1], c: 0, b: 0, a: 0};
+                 gameState.t = null; gameState.cw = null; gameState.dr = null; gameState.rw = null; gameState.df = null;
+                 gameState.p[0] = {...gameState.p[0], c: null, b: null, a: false};
+                 gameState.p[1] = {...gameState.p[1], c: null, b: null, a: false};
              }
              updateUI();
         });
@@ -513,15 +513,7 @@
                 return;
             }
             
-            const myCurrentName = gameState.p[myPlayerId].n;
-            const opponentName = gameState.p[1-myPlayerId].n;
-
             gameState = decodedState;
-
-            gameState.p[myPlayerId].n = myCurrentName;
-            if (gameState.st !== 'w') { // If it's not a new game join, restore opponent name
-                 gameState.p[1-myPlayerId].n = opponentName;
-            }
             
             gameCodeInput.value = '';
             updateUI();
@@ -537,12 +529,12 @@
             for (let i = 2; i <= 12; i++) {
                 const circle = document.createElement('button');
                 circle.textContent = i;
-                let isSelected = i === me.b || i === opponent.b;
+                let isSelected = i === me.b || (opponent && i === opponent.b);
 
                 let classes = 'bet-circle w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold border-4 transition ';
                 
                 if (i === me.b) classes += 'selected-by-me ';
-                else if (i === opponent.b) classes += 'selected-by-opponent ';
+                else if (opponent && i === opponent.b) classes += 'selected-by-opponent ';
                 else classes += 'bg-white border-gray-300 ';
 
                 if (myTurn && !me.b) classes += 'hover:bg-blue-200 cursor-pointer';
